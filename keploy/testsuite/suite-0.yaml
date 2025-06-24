@@ -1,0 +1,139 @@
+version: api.keploy.io/v2beta1
+kind: TestSuite
+name: Todo_CRUD_Operations
+spec:
+  metadata:
+    description: Test CRUD operations for Todo API with JSON request/response
+  load:
+    profile: constant_vus
+    vus: 3
+    duration: 15s
+    rps: 150
+    thresholds:
+      - metric: http_req_duration_p95
+        condition: "< 500ms"
+        severity: high
+        comment: "Ensure 95% of requests are below 500ms latency"
+      - metric: http_req_failed_rate
+        condition: "<= 1%"
+        severity: critical
+        comment: "Error rate must stay under 1%"
+      # - metric: data_received
+      #   condition: "> 0.01MB"
+      #   severity: low
+      #   comment: "Basic throughput check"
+    # profile: ramping_vus
+    # vus: 25
+    # duration: 3m
+    # rps: 0
+    # stages:
+    #   - duration: 30s
+    #     target: 10
+    #   - duration: 2m
+    #     target: 25
+    #   - duration: 30s
+    #     target: 0
+    # thresholds:
+    #   - metric: http_req_duration_p95
+    #     condition: "< 500ms"
+    #   - metric: http_req_failed_rate
+    #     condition: "< 1%"
+  steps:
+    - name: Create_todo
+      method: POST
+      url: /todos
+      headers:
+        Content-Type: application/json
+      body: |-
+        {
+          "title": "Test Todo",
+          "completed": false
+        }
+      extract:
+        todo_id: id
+      assert:
+        - type: status_code
+          expected_string: "201"
+        - type: json_equal
+          key: title
+          expected_string: Test Todo
+        - type: json_equal
+          key: completed
+          expected_string: "false"
+
+    - name: List_todos
+      method: GET
+      url: /todos
+      headers:
+        Content-Type: application/json
+      assert:
+        - type: status_code
+          expected_string: "200"
+        - type: json_array_contains
+          key: $
+          expected_string: '{"id":{{todo_id}},"title":"Test Todo","completed":false}'
+
+    - name: Get_todo
+      method: GET
+      url: /todos/{{todo_id}}
+      headers:
+        Content-Type: application/json
+      assert:
+        - type: status_code
+          expected_string: "200"
+        - type: json_equal
+          key: id
+          expected_string: '{{todo_id}}'
+        - type: json_equal
+          key: title
+          expected_string: Test Todo
+
+    - name: Update_todo
+      method: PUT
+      url: /todos/{{todo_id}}
+      headers:
+        Content-Type: application/json
+      body: |-
+        {
+          "title": "Updated Todo",
+          "completed": true
+        }
+      assert:
+        - type: status_code
+          expected_string: "200"
+        - type: json_equal
+          key: title
+          expected_string: Updated Todo
+        - type: json_equal
+          key: completed
+          expected_string: "true"
+
+    - name: Verify_update
+      method: GET
+      url: /todos/{{todo_id}}
+      headers:
+        Content-Type: application/json
+      assert:
+        - type: status_code
+          expected_string: "200"
+        - type: json_equal
+          key: title
+          expected_string: Updated Todo
+
+    - name: Delete_todo
+      method: DELETE
+      url: /todos/{{todo_id}}
+      headers:
+        Content-Type: application/json
+      assert:
+        - type: status_code
+          expected_string: "204"
+
+    - name: Verify_deletion
+      method: GET
+      url: /todos/{{todo_id}}
+      headers:
+        Content-Type: application/json
+      assert:
+        - type: status_code
+          expected_string: "404"
